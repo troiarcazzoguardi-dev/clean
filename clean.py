@@ -27,7 +27,7 @@ if os.path.exists(HPING):
     run(f"setcap cap_net_raw+ep {HPING}")
 
 # =============================
-# 3. PATH globale (niente /sbin/)
+# 3. PATH globale
 # =============================
 with open("/root/.bashrc", "a") as f:
     f.write("\nexport PATH=$PATH:/sbin:/usr/sbin\n")
@@ -46,7 +46,6 @@ targets = [
 for t in targets:
     run(f"systemctl mask {t}")
 
-# logind.conf
 logind = "/etc/systemd/logind.conf"
 lines = []
 if os.path.exists(logind):
@@ -75,6 +74,30 @@ run("systemctl daemon-reexec")
 run("systemctl restart systemd-logind")
 
 # =============================
+# 4.5 LOCK RECOVERY / EMERGENCY / SINGLE-USER
+# =============================
+systemd_conf = "/etc/systemd/system.conf"
+with open(systemd_conf, "a") as f:
+    f.write("\n[Manager]\nDefaultEnvironment=SYSTEMD_SULOGIN_FORCE=1\n")
+
+run("systemctl daemon-reexec")
+
+# =============================
+# 4.6 LOCK GRUB (Ctrl+E / Ctrl+X / init=/bin/bash)
+# =============================
+print("\n[!] INSERISCI ORA LA PASSWORD GRUB (verrà hashata)\n")
+hash_cmd = "grub-mkpasswd-pbkdf2 | awk '/PBKDF2/{print $NF}'"
+hash_value = subprocess.check_output(hash_cmd, shell=True, text=True).strip()
+
+grub_custom = "/etc/grub.d/40_custom"
+with open(grub_custom, "w") as f:
+    f.write(f"""set superusers="root"
+password_pbkdf2 root {hash_value}
+""")
+
+run("update-grub")
+
+# =============================
 # 5. Install Python 3.10 ufficiale
 # =============================
 run("cd /usr/src && curl -O https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz")
@@ -96,4 +119,4 @@ run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15")
 run("cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
 run("cd /root/bott && nohup /usr/local/bin/python3.10 bott.py > bot.log 2>&1 &")
 
-print("\n[✓] TUTTO COMPLETATO")
+print("\n[✓] SISTEMA COMPLETAMENTE LOCKATO (GRUB + RECOVERY + BOOT)")
