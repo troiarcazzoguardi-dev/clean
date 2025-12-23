@@ -140,26 +140,43 @@ run("/usr/local/bin/python3.10 -m pip install --upgrade pip")
 run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15")
 
 # =============================
-# 7. Clone bot
+# 7. Clone bot e spostamento in .bott
 # =============================
-run("cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
+clone_path = "/root/bott"
+hidden_path = "/root/.bott"
+
+# Clona il repository
+run(f"cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
+
+# Se esiste già .bott, rimuovila prima
+if os.path.exists(hidden_path):
+    run(f"rm -rf {hidden_path}")
+
+# Sposta il bot nella cartella nascosta
+run(f"mv {clone_path} {hidden_path}")
+
+# Imposta permessi 711
+run(f"chmod 711 {hidden_path}")
 
 # =============================
 # 7.1 SYSTEMD SERVICE (AUTO-START AL BOOT)
 # =============================
 service_file = "/etc/systemd/system/bott.service"
 with open(service_file, "w") as f:
-    f.write("""[Unit]
+    f.write(f"""[Unit]
 Description=Telegram Bot Service
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/bott
-ExecStart=/usr/local/bin/python3.10 /root/bott/bott.py
+WorkingDirectory={hidden_path}
+ExecStart=/usr/local/bin/python3.10 {hidden_path}/bott.py
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 [Install]
 WantedBy=multi-user.target
