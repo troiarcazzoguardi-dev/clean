@@ -2,24 +2,31 @@
 import os
 import subprocess
 import pexpect
+import sys
 
-def run(cmd):
+def run(cmd, fatal=False):
     print(f"[+] {cmd}")
-    subprocess.run(cmd, shell=True, check=False)
+    r = subprocess.run(cmd, shell=True)
+    if fatal and r.returncode != 0:
+        print("[!] ERRORE FATALE")
+        sys.exit(1)
 
 # =============================
 # REQUIRE ROOT
 # =============================
 if os.geteuid() != 0:
     print("Devi eseguire questo script come root")
-    exit(1)
+    sys.exit(1)
 
 # =============================
 # 1. Install dipendenze
 # =============================
-run("apt update")
-run("apt install -y hping3 git curl build-essential libssl-dev zlib1g-dev "
-    "libncurses5-dev libffi-dev libreadline-dev python3-pexpect")
+run("apt update", fatal=True)
+run(
+    "apt install -y hping3 git curl build-essential libssl-dev zlib1g-dev "
+    "libncurses5-dev libffi-dev libreadline-dev python3-pexpect",
+    fatal=True
+)
 
 # =============================
 # 2. setcap su hping3
@@ -50,12 +57,12 @@ for t in targets:
 
 logind = "/etc/systemd/logind.conf"
 lines = []
+
 if os.path.exists(logind):
     with open(logind, "r") as f:
         lines = f.readlines()
 
 def set_conf(key, value):
-    global lines
     for i, l in enumerate(lines):
         if l.strip().startswith(key):
             lines[i] = f"{key}={value}\n"
@@ -74,7 +81,7 @@ run("systemctl daemon-reexec")
 run("systemctl restart systemd-logind")
 
 # =============================
-# 4.5 LOCK RECOVERY / EMERGENCY
+# 4.5 LOCK EMERGENCY / RECOVERY
 # =============================
 systemd_conf = "/etc/systemd/system.conf"
 with open(systemd_conf, "a") as f:
@@ -83,7 +90,7 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB (AUTO – SENZA INPUT MANUALE)
+# 4.6 LOCK GRUB (100% AUTOMATICO – STABILE)
 # =============================
 GRUB_PASSWORD = "kali55757"
 grub_custom = "/etc/grub.d/40_custom"
@@ -91,15 +98,17 @@ grub_custom = "/etc/grub.d/40_custom"
 print("[+] Generazione hash GRUB automatica")
 
 child = pexpect.spawn("grub-mkpasswd-pbkdf2", encoding="utf-8", timeout=30)
-child.expect("Enter password:")
-child.sendline(GRUB_PASSWORD)
-child.expect("Retype password:")
-child.sendline(GRUB_PASSWORD)
-child.expect(pexpect.EOF)
 
+# match robusto (qualsiasi lingua)
+child.expect(r"[Pp]assword")
+child.sendline(GRUB_PASSWORD)
+
+child.expect(r"[Rr]etype|[Rr]ipeti|[Aa]gain")
+child.sendline(GRUB_PASSWORD)
+
+child.expect(pexpect.EOF)
 output = child.before
 
-# Estrai l'hash
 hash_value = None
 for line in output.splitlines():
     if "grub.pbkdf2" in line:
@@ -107,47 +116,46 @@ for line in output.splitlines():
         break
 
 if not hash_value:
-    print("ERRORE: impossibile generare hash GRUB")
-    exit(1)
+    print("ERRORE: hash GRUB non trovato")
+    print(output)
+    sys.exit(1)
 
-# Scrivi su 40_custom
-with open(grub_custom, "w") as f:
-    f.write(f"""set superusers="root"
+grub_content = f"""set superusers="root"
 password_pbkdf2 root {hash_value}
-""")
+"""
 
-run("update-grub")
+# scrittura SICURA (no problemi permessi)
+run(f'echo "{grub_content}" | tee {grub_custom} > /dev/null', fatal=True)
+
+run("update-grub", fatal=True)
 
 # =============================
 # 5. Install Python 3.10
 # =============================
-run("cd /usr/src && curl -O https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz")
-run("cd /usr/src && tar xzf Python-3.10.14.tgz")
-run("cd /usr/src/Python-3.10.14 && ./configure --enable-optimizations")
-run("cd /usr/src/Python-3.10.14 && make -j$(nproc)")
-run("cd /usr/src/Python-3.10.14 && make altinstall")
+run("cd /usr/src && curl -O https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz", fatal=True)
+run("cd /usr/src && tar xzf Python-3.10.14.tgz", fatal=True)
+run("cd /usr/src/Python-3.10.14 && ./configure --enable-optimizations", fatal=True)
+run("cd /usr/src/Python-3.10.14 && make -j$(nproc)", fatal=True)
+run("cd /usr/src/Python-3.10.14 && make altinstall", fatal=True)
 
 # =============================
-# 6. pip + python-telegram-bot
+# 6. pip + telegram bot
 # =============================
-run("/usr/local/bin/python3.10 -m ensurepip")
-run("/usr/local/bin/python3.10 -m pip install --upgrade pip")
-run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15")
+run("/usr/local/bin/python3.10 -m ensurepip", fatal=True)
+run("/usr/local/bin/python3.10 -m pip install --upgrade pip", fatal=True)
+run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15", fatal=True)
 
 # =============================
 # 7. Clone bot
 # =============================
 run("cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
 
-# =============================
-# 7.1 Sposta in .bott + permessi
-# =============================
 if os.path.exists("/root/bott"):
     run("mv /root/bott /root/.bott")
     run("chmod 711 /root/.bott")
 
 # =============================
-# 7.2 SYSTEMD SERVICE
+# 8. SYSTEMD SERVICE
 # =============================
 service_file = "/etc/systemd/system/bott.service"
 with open(service_file, "w") as f:
@@ -171,4 +179,4 @@ run("systemctl daemon-reload")
 run("systemctl enable bott.service")
 run("systemctl start bott.service")
 
-print("\n[✓] SISTEMA LOCKATO + GRUB PROTETTO + BOT AUTO-START")
+print("\n[✓] SISTEMA LOCKATO – GRUB PROTETTO – BOT ATTIVO")
