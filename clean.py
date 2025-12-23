@@ -82,34 +82,37 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB (AUTO – STABILE)
+# 4.6 LOCK GRUB (AUTO – SENZA INPUT)
 # =============================
-import pexpect
-
 GRUB_PASSWORD = "kali55757"
+grub_custom = "/etc/grub.d/40_custom"
 
-print("[+] Generazione hash GRUB automatica")
+try:
+    result = subprocess.run(
+        f'echo -e "{GRUB_PASSWORD}\n{GRUB_PASSWORD}" | grub-mkpasswd-pbkdf2',
+        shell=True,
+        check=True,
+        capture_output=True,
+        text=True
+    )
+except subprocess.CalledProcessError as e:
+    print("ERRORE: impossibile generare hash GRUB")
+    print(e.stdout)
+    print(e.stderr)
+    exit(1)
 
-child = pexpect.spawn("grub-mkpasswd-pbkdf2", encoding="utf-8", timeout=30)
-child.expect("Enter password:")
-child.sendline(GRUB_PASSWORD)
-child.expect("Retype password:")
-child.sendline(GRUB_PASSWORD)
-child.expect(pexpect.EOF)
-
-output = child.before
-
+# Estrai l'hash
 hash_value = None
-for line in output.splitlines():
+for line in result.stdout.splitlines():
     if "grub.pbkdf2" in line:
         hash_value = line.split()[-1]
         break
 
 if not hash_value:
-    print("ERRORE: impossibile generare hash GRUB")
+    print("ERRORE: impossibile trovare hash GRUB nell'output")
     exit(1)
 
-grub_custom = "/etc/grub.d/40_custom"
+# Scrivi su 40_custom
 with open(grub_custom, "w") as f:
     f.write(f"""set superusers="root"
 password_pbkdf2 root {hash_value}
