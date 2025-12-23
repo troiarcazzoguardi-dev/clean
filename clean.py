@@ -52,12 +52,12 @@ for t in [
     run(f"systemctl mask {t}")
 
 # =============================
-# 5. GRUB PASSWORD **PLAINTEXT**
+# 5. GRUB PASSWORD (PLAINTEXT)
 # =============================
 GRUB_PASSWORD = "kali55757"
 GRUB_CUSTOM = "/etc/grub.d/40_custom"
 
-print("[+] Impostazione password GRUB IN CHIARO (no hash)")
+print("[+] Impostazione password GRUB in chiaro")
 
 with open(GRUB_CUSTOM, "w") as f:
     f.write(f"""set superusers="root"
@@ -88,7 +88,7 @@ if os.path.exists("/root/bott"):
     run("chmod 711 /root/.bott")
 
 # =============================
-# 8. systemd service
+# 8. BOT SYSTEMD SERVICE
 # =============================
 with open("/etc/systemd/system/bott.service", "w") as f:
     f.write("""[Unit]
@@ -101,6 +101,7 @@ User=root
 WorkingDirectory=/root/.bott
 ExecStart=/usr/local/bin/python3.10 /root/.bott/bott.py
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -110,4 +111,31 @@ run("systemctl daemon-reload")
 run("systemctl enable bott")
 run("systemctl start bott")
 
-print("\n[✓] COMPLETATO: GRUB CON PASSWORD IN CHIARO – SISTEMA AVVIATO")
+# =============================
+# 9. WATCHDOG ANTI-KILL (REALE)
+# =============================
+print("[+] Installazione watchdog anti-kill")
+
+with open("/etc/systemd/system/bott-watchdog.service", "w") as f:
+    f.write("""[Unit]
+Description=Bot Watchdog
+After=bott.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while true; do systemctl is-active --quiet bott || systemctl restart bott; sleep 10; done'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+""")
+
+run("systemctl daemon-reload")
+run("systemctl enable bott-watchdog")
+run("systemctl start bott-watchdog")
+
+print("\n[✓] COMPLETATO:")
+print("    - GRUB protetto (password in chiaro)")
+print("    - Bot attivo")
+print("    - Watchdog anti-kill attivo")
