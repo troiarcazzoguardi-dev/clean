@@ -80,36 +80,43 @@ run("systemctl daemon-reexec")
 run("systemctl restart systemd-logind")
 
 # =============================
-# 4.6 GRUB LOCK (FINALE)
+# 4.6 GRUB LOCK (FIX DEFINITIVO)
 # =============================
 GRUB_PASSWORD = "kali55757"
 GRUB_CUSTOM = "/etc/grub.d/40_custom"
+TMP_GRUB = "/tmp/grub_hash.txt"
 
-print("[+] Generazione hash GRUB")
+print("[+] Generazione hash GRUB (metodo stabile)")
 
-child = pexpect.spawn("grub-mkpasswd-pbkdf2", encoding="utf-8", timeout=30)
+child = pexpect.spawn(
+    "grub-mkpasswd-pbkdf2 2>&1 | tee " + TMP_GRUB,
+    encoding="utf-8",
+    timeout=30,
+    shell=True
+)
+
 child.expect(r"[Pp]assword")
 child.sendline(GRUB_PASSWORD)
 child.expect(r"[Pp]assword")
 child.sendline(GRUB_PASSWORD)
 child.expect(pexpect.EOF)
 
-output = child.read()
+# Leggi hash da file temporaneo (robusto)
 hash_value = None
-for line in output.splitlines():
-    if "grub.pbkdf2" in line:
-        hash_value = line.strip().split()[-1]
-        break
+with open(TMP_GRUB, "r") as f:
+    for line in f:
+        if "grub.pbkdf2" in line:
+            hash_value = line.strip().split()[-1]
+            break
+os.remove(TMP_GRUB)
 
 if not hash_value:
     print("ERRORE FATALE: hash GRUB non trovato")
-    print(output)
     sys.exit(1)
 
 grub_cfg = f"""set superusers="root"
 password_pbkdf2 root {hash_value}
 """
-
 run(f'echo "{grub_cfg}" | tee {GRUB_CUSTOM} > /dev/null', fatal=True)
 run("update-grub", fatal=True)
 
