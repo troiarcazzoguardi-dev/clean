@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
+import sys
 import subprocess
 import pexpect
-import sys
 
 def run(cmd, fatal=False):
     print(f"[+] {cmd}")
@@ -90,7 +90,7 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB (100% AUTOMATICO – STABILE)
+# 4.6 LOCK GRUB (VERSIONE DEFINITIVA)
 # =============================
 GRUB_PASSWORD = "kali55757"
 grub_custom = "/etc/grub.d/40_custom"
@@ -99,11 +99,12 @@ print("[+] Generazione hash GRUB automatica")
 
 child = pexpect.spawn("grub-mkpasswd-pbkdf2", encoding="utf-8", timeout=30)
 
-# match robusto (qualsiasi lingua)
+# primo prompt
 child.expect(r"[Pp]assword")
 child.sendline(GRUB_PASSWORD)
 
-child.expect(r"[Rr]etype|[Rr]ipeti|[Aa]gain")
+# secondo prompt (stessa parola 'password')
+child.expect(r"[Pp]assword")
 child.sendline(GRUB_PASSWORD)
 
 child.expect(pexpect.EOF)
@@ -124,9 +125,7 @@ grub_content = f"""set superusers="root"
 password_pbkdf2 root {hash_value}
 """
 
-# scrittura SICURA (no problemi permessi)
 run(f'echo "{grub_content}" | tee {grub_custom} > /dev/null', fatal=True)
-
 run("update-grub", fatal=True)
 
 # =============================
