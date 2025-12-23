@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import getpass
 
 def run(cmd):
     print(f"[+] {cmd}")
@@ -55,7 +56,7 @@ if os.path.exists(logind):
 def set_conf(key, value):
     global lines
     found = False
-    for i,l in enumerate(lines):
+    for i, l in enumerate(lines):
         if l.strip().startswith(key):
             lines[i] = f"{key}={value}\n"
             found = True
@@ -85,9 +86,34 @@ run("systemctl daemon-reexec")
 # =============================
 # 4.6 LOCK GRUB (Ctrl+E / Ctrl+X / init=/bin/bash)
 # =============================
-print("\n[!] INSERISCI ORA LA PASSWORD GRUB (verrà hashata)\n")
-hash_cmd = "grub-mkpasswd-pbkdf2 | awk '/PBKDF2/{print $NF}'"
-hash_value = subprocess.check_output(hash_cmd, shell=True, text=True).strip()
+print("\n[!] INSERISCI ORA LA PASSWORD GRUB (solo lettere OK)\n")
+
+pw1 = getpass.getpass("Password GRUB: ")
+pw2 = getpass.getpass("Conferma password GRUB: ")
+
+if pw1 != pw2 or not pw1:
+    print("Errore: password non valide o non coincidono")
+    exit(1)
+
+proc = subprocess.Popen(
+    ["grub-mkpasswd-pbkdf2"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True
+)
+
+stdout, _ = proc.communicate(pw1 + "\n" + pw1 + "\n")
+
+hash_value = None
+for line in stdout.splitlines():
+    if "grub.pbkdf2" in line:
+        hash_value = line.split()[-1]
+        break
+
+if not hash_value:
+    print("Errore: impossibile generare hash GRUB")
+    exit(1)
 
 grub_custom = "/etc/grub.d/40_custom"
 with open(grub_custom, "w") as f:
