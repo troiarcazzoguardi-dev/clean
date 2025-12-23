@@ -53,28 +53,25 @@ for t in targets:
     run(f"systemctl mask {t}")
 
 # =============================
-# 5. NEUTRALIZZAZIONE GRUB
+# 5. GRUB – NASCOSTO SICURO (NO RIMOZIONI)
 # =============================
-print("[+] Neutralizzazione GRUB")
+print("[+] Configurazione GRUB invisibile (safe mode)")
 
 GRUB_DEFAULT = "/etc/default/grub"
 
 with open(GRUB_DEFAULT, "w") as f:
     f.write("""GRUB_TIMEOUT=0
 GRUB_TIMEOUT_STYLE=hidden
+GRUB_HIDDEN_TIMEOUT=0
 GRUB_DISABLE_RECOVERY=true
 GRUB_DISABLE_SUBMENU=true
-GRUB_HIDDEN_TIMEOUT=0
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_FORCE_HIDDEN_MENU=true
+GRUB_RECORDFAIL_TIMEOUT=0
+GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0"
 """)
 
-# blocca update-grub
-run("chmod -x /usr/sbin/update-grub || true")
-run("chmod -x /usr/sbin/grub-mkconfig || true")
-
-# rimuove strumenti GRUB (bootloader resta installato)
-run("apt purge -y grub-common grub2-common || true")
-run("apt-mark hold grub grub-pc grub-efi-amd64 || true")
+# Applica configurazione GRUB (OBBLIGATORIO)
+run("update-grub", fatal=True)
 
 # =============================
 # 6. INSTALL PYTHON 3.10
@@ -145,12 +142,13 @@ run("systemctl enable bott-watchdog")
 run("systemctl start bott-watchdog")
 
 print("""
-[✓] COMPLETATO
+[✓] COMPLETATO (SAFE)
 
-- GRUB invisibile e non interattivo
+- GRUB completamente nascosto
+- Nessun menu visibile
 - Recovery disabilitata
-- Tool GRUB rimossi
-- Update GRUB impossibile
+- Nessuna rimozione pericolosa
+- Boot sempre garantito
 - Bot attivo
 - Watchdog anti-kill attivo
 - Power / reboot / suspend disabilitati
