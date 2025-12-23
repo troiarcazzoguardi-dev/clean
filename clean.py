@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import pexpect
 
 def run(cmd):
     print(f"[+] {cmd}")
@@ -82,34 +83,31 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB (AUTO – SENZA INPUT)
+# 4.6 LOCK GRUB (AUTO – SENZA INPUT MANUALE)
 # =============================
 GRUB_PASSWORD = "kali55757"
 grub_custom = "/etc/grub.d/40_custom"
 
-try:
-    result = subprocess.run(
-        f'echo -e "{GRUB_PASSWORD}\n{GRUB_PASSWORD}" | grub-mkpasswd-pbkdf2',
-        shell=True,
-        check=True,
-        capture_output=True,
-        text=True
-    )
-except subprocess.CalledProcessError as e:
-    print("ERRORE: impossibile generare hash GRUB")
-    print(e.stdout)
-    print(e.stderr)
-    exit(1)
+print("[+] Generazione hash GRUB automatica")
+
+child = pexpect.spawn("grub-mkpasswd-pbkdf2", encoding="utf-8", timeout=30)
+child.expect("Enter password:")
+child.sendline(GRUB_PASSWORD)
+child.expect("Retype password:")
+child.sendline(GRUB_PASSWORD)
+child.expect(pexpect.EOF)
+
+output = child.before
 
 # Estrai l'hash
 hash_value = None
-for line in result.stdout.splitlines():
+for line in output.splitlines():
     if "grub.pbkdf2" in line:
         hash_value = line.split()[-1]
         break
 
 if not hash_value:
-    print("ERRORE: impossibile trovare hash GRUB nell'output")
+    print("ERRORE: impossibile generare hash GRUB")
     exit(1)
 
 # Scrivi su 40_custom
