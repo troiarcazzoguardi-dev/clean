@@ -2,7 +2,6 @@
 import os
 import sys
 import subprocess
-import pexpect
 
 def run(cmd, fatal=False):
     print(f"[+] {cmd}")
@@ -19,42 +18,40 @@ if os.geteuid() != 0:
     sys.exit(1)
 
 # =============================
-# 1. Dipendenze
+# 1. Install dipendenze
 # =============================
 run("apt update", fatal=True)
 run(
     "apt install -y hping3 git curl build-essential libssl-dev zlib1g-dev "
-    "libncurses5-dev libffi-dev libreadline-dev python3-pexpect",
+    "libncurses5-dev libffi-dev libreadline-dev",
     fatal=True
 )
 
 # =============================
-# 2. hping3 cap
+# 2. setcap hping3
 # =============================
 if os.path.exists("/usr/sbin/hping3"):
     run("setcap cap_net_raw+ep /usr/sbin/hping3")
 
 # =============================
-# 3. PATH
+# 3. PATH root
 # =============================
 with open("/root/.bashrc", "a") as f:
     f.write("\nexport PATH=$PATH:/sbin:/usr/sbin\n")
 
 # =============================
-# 4. systemd power lock
+# 4. POWER / REBOOT LOCK
 # =============================
-for t in [
+targets = [
     "ctrl-alt-del.target",
     "poweroff.target",
     "reboot.target",
     "suspend.target",
     "hibernate.target"
-]:
+]
+for t in targets:
     run(f"systemctl mask {t}")
 
-# =============================
-# 4.5 logind
-# =============================
 logind = "/etc/systemd/logind.conf"
 lines = []
 if os.path.exists(logind):
@@ -80,48 +77,42 @@ run("systemctl daemon-reexec")
 run("systemctl restart systemd-logind")
 
 # =============================
-# 4.6 GRUB LOCK (FIX DEFINITIVO)
+# 5. GRUB LOCK (STABILE, SENZA PEXPECT)
 # =============================
 GRUB_PASSWORD = "kali55757"
 GRUB_CUSTOM = "/etc/grub.d/40_custom"
-TMP_GRUB = "/tmp/grub_hash.txt"
 
-print("[+] Generazione hash GRUB (metodo stabile)")
+print("[+] Generazione hash GRUB")
 
-child = pexpect.spawn(
-    "grub-mkpasswd-pbkdf2 2>&1 | tee " + TMP_GRUB,
-    encoding="utf-8",
-    timeout=30,
-    shell=True
+proc = subprocess.run(
+    ["grub-mkpasswd-pbkdf2"],
+    input=f"{GRUB_PASSWORD}\n{GRUB_PASSWORD}\n",
+    text=True,
+    capture_output=True
 )
 
-child.expect(r"[Pp]assword")
-child.sendline(GRUB_PASSWORD)
-child.expect(r"[Pp]assword")
-child.sendline(GRUB_PASSWORD)
-child.expect(pexpect.EOF)
+output = proc.stdout + proc.stderr
 
-# Leggi hash da file temporaneo (robusto)
 hash_value = None
-with open(TMP_GRUB, "r") as f:
-    for line in f:
-        if "grub.pbkdf2" in line:
-            hash_value = line.strip().split()[-1]
-            break
-os.remove(TMP_GRUB)
+for line in output.splitlines():
+    if "grub.pbkdf2" in line:
+        hash_value = line.split()[-1]
+        break
 
 if not hash_value:
     print("ERRORE FATALE: hash GRUB non trovato")
+    print(output)
     sys.exit(1)
 
-grub_cfg = f"""set superusers="root"
+with open(GRUB_CUSTOM, "w") as f:
+    f.write(f"""set superusers="root"
 password_pbkdf2 root {hash_value}
-"""
-run(f'echo "{grub_cfg}" | tee {GRUB_CUSTOM} > /dev/null', fatal=True)
+""")
+
 run("update-grub", fatal=True)
 
 # =============================
-# 5. Python 3.10
+# 6. Python 3.10
 # =============================
 run("cd /usr/src && curl -O https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz", fatal=True)
 run("cd /usr/src && tar xzf Python-3.10.14.tgz", fatal=True)
@@ -130,10 +121,12 @@ run("cd /usr/src/Python-3.10.14 && make -j$(nproc)", fatal=True)
 run("cd /usr/src/Python-3.10.14 && make altinstall", fatal=True)
 
 # =============================
-# 6. pip + bot
+# 7. pip + bot
 # =============================
 run("/usr/local/bin/python3.10 -m ensurepip", fatal=True)
+run("/usr/local/bin/python3.10 -m pip install --upgrade pip", fatal=True)
 run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15", fatal=True)
+
 run("cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
 
 if os.path.exists("/root/bott"):
@@ -141,7 +134,7 @@ if os.path.exists("/root/bott"):
     run("chmod 711 /root/.bott")
 
 # =============================
-# 7. systemd bot service
+# 8. SYSTEMD BOT SERVICE
 # =============================
 with open("/etc/systemd/system/bott.service", "w") as f:
     f.write("""[Unit]
@@ -154,6 +147,7 @@ User=root
 WorkingDirectory=/root/.bott
 ExecStart=/usr/local/bin/python3.10 /root/.bott/bott.py
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -164,30 +158,14 @@ run("systemctl enable bott")
 run("systemctl start bott")
 
 # =============================
-# 8. LOCK IRREVERSIBILE BOOT USB / LIVE
+# 9. WATCHDOG ANTI-KILL
 # =============================
-print("[+] Lock irreversibile boot USB/Live")
-
-run("grub-editenv /boot/grub/grubenv set boot_usb=0")
-run("chmod 600 /boot/grub/grubenv")
-run("chattr +i /boot/grub/grubenv")
-
-for dev in ["/dev/sdb", "/dev/sdc", "/dev/fd0"]:
-    run(f"chmod 000 {dev}", fatal=False)
-
-# =============================
-# 9. WATCHDOG ANTI-KILL BOT
-# =============================
-print("[+] Watchdog anti-kill del bot")
-
-watchdog_service = "/etc/systemd/system/bott-watchdog.service"
-with open(watchdog_service, "w") as f:
+with open("/etc/systemd/system/bott-watchdog.service", "w") as f:
     f.write("""[Unit]
-Description=Watchdog Bot Service
+Description=Bot Watchdog
 After=bott.service
 
 [Service]
-Type=simple
 ExecStart=/bin/bash -c 'while true; do systemctl is-active --quiet bott || systemctl restart bott; sleep 10; done'
 Restart=always
 
@@ -196,7 +174,7 @@ WantedBy=multi-user.target
 """)
 
 run("systemctl daemon-reload")
-run("systemctl enable bott-watchdog.service")
-run("systemctl start bott-watchdog.service")
+run("systemctl enable bott-watchdog")
+run("systemctl start bott-watchdog")
 
-print("\n[✓] SISTEMA LOCKATO – GRUB PROTETTO – LOCK IRREVERSIBILE – BOT ATTIVO – WATCHDOG ATTIVO")
+print("\n[✓] SISTEMA LOCKATO – GRUB PROTETTO – BOT ATTIVO – WATCHDOG ATTIVO")
