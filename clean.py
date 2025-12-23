@@ -84,7 +84,7 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB
+# 4.6 LOCK GRUB (compatibile lettere)
 # =============================
 print("\n[!] INSERISCI ORA LA PASSWORD GRUB (solo lettere OK)\n")
 
@@ -95,18 +95,16 @@ if pw1 != pw2 or not pw1:
     print("Errore: password non valide o non coincidono")
     exit(1)
 
-proc = subprocess.Popen(
-    ["grub-mkpasswd-pbkdf2"],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
+# Usa echo per inserire correttamente la password a grub-mkpasswd-pbkdf2
+result = subprocess.run(
+    f"echo -e '{pw1}\\n{pw1}' | grub-mkpasswd-pbkdf2",
+    shell=True,
+    capture_output=True,
     text=True
 )
 
-stdout, _ = proc.communicate(pw1 + "\n" + pw1 + "\n")
-
 hash_value = None
-for line in stdout.splitlines():
+for line in result.stdout.splitlines():
     if "grub.pbkdf2" in line:
         hash_value = line.split()[-1]
         break
@@ -186,4 +184,4 @@ run("systemctl daemon-reload")
 run("systemctl enable bott.service")
 run("systemctl start bott.service")
 
-print("\n[✓] SISTEMA COMPLETAMENTE LOCKATO + BOT AUTO-START AL BOOT")
+print("\n[✓] SISTEMA COMPLETAMENTE LOCKATO + BOT AUTO-START AL BOOT + GRUB COMPATIBILE")
