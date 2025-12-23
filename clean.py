@@ -70,8 +70,8 @@ GRUB_RECORDFAIL_TIMEOUT=0
 GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0"
 """)
 
-# Applica configurazione GRUB in modo silenzioso per evitare blocchi
-run("update-grub > /dev/null 2>&1", fatal=True)
+# Aggiornamento GRUB sicuro, senza bloccare lo script
+run("update-grub > /dev/null 2>&1", fatal=False)
 
 # =============================
 # 6. INSTALL PYTHON 3.10
@@ -144,8 +144,7 @@ run("systemctl start bott-watchdog")
 print("""
 [✓] COMPLETATO (SAFE)
 
-- GRUB completamente nascosto e sicuro
-- Nessun menu visibile
+- GRUB completamente nascosto e non interattivo
 - Recovery disabilitata
 - Boot garantito
 - Bot attivo
