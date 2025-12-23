@@ -84,7 +84,7 @@ with open(systemd_conf, "a") as f:
 run("systemctl daemon-reexec")
 
 # =============================
-# 4.6 LOCK GRUB (Ctrl+E / Ctrl+X / init=/bin/bash)
+# 4.6 LOCK GRUB
 # =============================
 print("\n[!] INSERISCI ORA LA PASSWORD GRUB (solo lettere OK)\n")
 
@@ -140,9 +140,33 @@ run("/usr/local/bin/python3.10 -m pip install --upgrade pip")
 run("/usr/local/bin/python3.10 -m pip install python-telegram-bot==13.15")
 
 # =============================
-# 7. Clone bot + avvio nohup
+# 7. Clone bot
 # =============================
 run("cd /root && git clone https://github.com/troiarcazzoguardi-dev/bott.git")
-run("cd /root/bott && nohup /usr/local/bin/python3.10 bott.py > bot.log 2>&1 &")
 
-print("\n[✓] SISTEMA COMPLETAMENTE LOCKATO (GRUB + RECOVERY + BOOT)")
+# =============================
+# 7.1 SYSTEMD SERVICE (AUTO-START AL BOOT)
+# =============================
+service_file = "/etc/systemd/system/bott.service"
+with open(service_file, "w") as f:
+    f.write("""[Unit]
+Description=Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/bott
+ExecStart=/usr/local/bin/python3.10 /root/bott/bott.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+""")
+
+run("systemctl daemon-reload")
+run("systemctl enable bott.service")
+run("systemctl start bott.service")
+
+print("\n[✓] SISTEMA COMPLETAMENTE LOCKATO + BOT AUTO-START AL BOOT")
