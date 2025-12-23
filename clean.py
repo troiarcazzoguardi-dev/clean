@@ -2,6 +2,7 @@
 import os
 import sys
 import subprocess
+import re
 
 def run(cmd, fatal=False):
     print(f"[+] {cmd}")
@@ -40,7 +41,7 @@ with open("/root/.bashrc", "a") as f:
     f.write("\nexport PATH=$PATH:/sbin:/usr/sbin\n")
 
 # =============================
-# 4. POWER / REBOOT LOCK
+# 4. POWER / REBOOT / SUSPEND LOCK
 # =============================
 targets = [
     "ctrl-alt-del.target",
@@ -77,30 +78,42 @@ run("systemctl daemon-reexec")
 run("systemctl restart systemd-logind")
 
 # =============================
-# 5. GRUB LOCK (STABILE, SENZA PEXPECT)
+# 5. GRUB LOCK – COMPATIBILE TUTTE LE VERSIONI
 # =============================
 GRUB_PASSWORD = "kali55757"
 GRUB_CUSTOM = "/etc/grub.d/40_custom"
 
-print("[+] Generazione hash GRUB")
+print("[+] Generazione hash GRUB (multi-versione)")
 
-proc = subprocess.run(
+proc = subprocess.Popen(
     ["grub-mkpasswd-pbkdf2"],
-    input=f"{GRUB_PASSWORD}\n{GRUB_PASSWORD}\n",
-    text=True,
-    capture_output=True
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True
 )
 
-output = proc.stdout + proc.stderr
+stdout, stderr = proc.communicate(f"{GRUB_PASSWORD}\n{GRUB_PASSWORD}\n")
+output = stdout + stderr
+
+# PATTERN COMPATIBILI CON TUTTE LE VERSIONI NOTE
+patterns = [
+    r"(grub\.pbkdf2\.sha512\.[^\s]+)",           # standard moderno
+    r"(grub\.pbkdf2\.[^\s]+)",                   # versioni vecchie
+    r"encrypted as ([^\s]+)",                    # output alternativo
+    r"hash of your password is ([^\s]+)",        # output testuale
+]
 
 hash_value = None
-for line in output.splitlines():
-    if "grub.pbkdf2" in line:
-        hash_value = line.split()[-1]
+for p in patterns:
+    m = re.search(p, output, re.IGNORECASE)
+    if m:
+        hash_value = m.group(1)
         break
 
 if not hash_value:
     print("ERRORE FATALE: hash GRUB non trovato")
+    print("OUTPUT COMPLETO:")
     print(output)
     sys.exit(1)
 
@@ -177,4 +190,4 @@ run("systemctl daemon-reload")
 run("systemctl enable bott-watchdog")
 run("systemctl start bott-watchdog")
 
-print("\n[✓] SISTEMA LOCKATO – GRUB PROTETTO – BOT ATTIVO – WATCHDOG ATTIVO")
+print("\n[✓] COMPLETATO: GRUB PROTETTO – SISTEMA LOCK – BOT + WATCHDOG ATTIVI")
