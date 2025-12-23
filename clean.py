@@ -53,7 +53,7 @@ for t in targets:
     run(f"systemctl mask {t}")
 
 # =============================
-# 5. GRUB – NASCOSTO SICURO (NO RIMOZIONI)
+# 5. GRUB – NASCOSTO SICURO
 # =============================
 print("[+] Configurazione GRUB invisibile (safe mode)")
 
@@ -70,8 +70,8 @@ GRUB_RECORDFAIL_TIMEOUT=0
 GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0"
 """)
 
-# Applica configurazione GRUB (OBBLIGATORIO)
-run("update-grub", fatal=True)
+# Applica configurazione GRUB in modo silenzioso per evitare blocchi
+run("update-grub > /dev/null 2>&1", fatal=True)
 
 # =============================
 # 6. INSTALL PYTHON 3.10
@@ -144,11 +144,10 @@ run("systemctl start bott-watchdog")
 print("""
 [✓] COMPLETATO (SAFE)
 
-- GRUB completamente nascosto
+- GRUB completamente nascosto e sicuro
 - Nessun menu visibile
 - Recovery disabilitata
-- Nessuna rimozione pericolosa
-- Boot sempre garantito
+- Boot garantito
 - Bot attivo
 - Watchdog anti-kill attivo
 - Power / reboot / suspend disabilitati
